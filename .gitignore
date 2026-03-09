@@ -1,0 +1,15 @@
+# Root-level gitignore
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Docker overrides
+docker-compose.override.yml
+
+# Deployment artifacts
+*.pem
