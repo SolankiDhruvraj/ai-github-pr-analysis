@@ -11,7 +11,7 @@ function App() {
 
   // Data State
   const {
-    items: reviews, loading, error, selectedReviewId, expandedFiles
+    items: reviews, loading, selectedReviewId, expandedFiles
   } = useSelector((state) => state.reviews);
 
   // Feature States
