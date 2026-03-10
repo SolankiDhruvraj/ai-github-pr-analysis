@@ -1,6 +1,9 @@
 # ── Build Stage ──────────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
+# Install build dependencies for Prisma
+RUN apk add --no-cache openssl libc6-compat
+
 WORKDIR /app
 
 COPY package*.json ./
@@ -13,6 +16,9 @@ RUN npx prisma generate
 
 # ── Production Stage ─────────────────────────────────────────────────────────
 FROM node:20-alpine AS production
+
+# Install production dependencies for Prisma
+RUN apk add --no-cache openssl libc6-compat
 
 WORKDIR /app
 
