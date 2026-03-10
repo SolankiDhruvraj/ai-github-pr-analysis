@@ -80,7 +80,10 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ~/pr-analysis
+            if [ ! -d "ai-github-pr-analysis" ]; then
+              git clone https://github.com/SolankiDhruvraj/ai-github-pr-analysis.git
+            fi
+            cd ai-github-pr-analysis
             git pull origin main
             docker compose pull
             docker compose up -d --build
