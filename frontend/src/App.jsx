@@ -242,6 +242,17 @@ function App() {
                 </div>
                 <button onClick={() => dispatch(fetchReviews())} className="px-6 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-all">Check Status</button>
               </div>
+            ) : selectedReview.status === 'ERROR' ? (
+              <div className="h-full min-h-[400px] flex flex-col items-center justify-center glass-panel rounded-3xl p-12 text-center space-y-6 border border-rose-500/20">
+                <div className="w-16 h-16 rounded-3xl bg-rose-500/10 flex items-center justify-center text-3xl text-rose-400">!</div>
+                <div className="space-y-2 max-w-lg">
+                  <h3 className="text-xl font-semibold text-slate-100">Analysis Failed</h3>
+                  <p className="text-sm text-slate-400">
+                    The backend could not finish reading this pull request. Check the backend logs first. If this is a private repo or a fine-grained token, make sure the GitHub token has repository access plus <span className="font-semibold text-slate-200">Pull requests: Read</span> and <span className="font-semibold text-slate-200">Contents: Read</span>.
+                  </p>
+                </div>
+                <button onClick={() => dispatch(fetchReviews())} className="px-6 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-all">Refresh Review</button>
+              </div>
             ) : (
               <div className="space-y-6 animate-fade-in">
                 {/* Review Header Stats */}
