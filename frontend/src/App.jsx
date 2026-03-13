@@ -250,6 +250,12 @@ function App() {
                   <p className="text-sm text-slate-400">
                     The backend could not finish reading this pull request. Check the backend logs first. If this is a private repo or a fine-grained token, make sure the GitHub token has repository access plus <span className="font-semibold text-slate-200">Pull requests: Read</span> and <span className="font-semibold text-slate-200">Contents: Read</span>.
                   </p>
+                  {selectedReview.errorMessage && (
+                    <div className="rounded-2xl border border-rose-500/20 bg-slate-950/70 px-4 py-3 text-left">
+                      <div className="text-[0.65rem] font-bold uppercase tracking-widest text-rose-400">Backend Error</div>
+                      <div className="mt-2 text-xs leading-relaxed text-slate-300">{selectedReview.errorMessage}</div>
+                    </div>
+                  )}
                 </div>
                 <button onClick={() => dispatch(fetchReviews())} className="px-6 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-semibold text-slate-200 hover:bg-slate-800 transition-all">Refresh Review</button>
               </div>
