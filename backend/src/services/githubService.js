@@ -4,11 +4,68 @@ const octokit = new Octokit({
   auth: process.env.GITHUB_TOKEN
 });
 
+function normalizeFileStatus(status) {
+  return status === 'removed' ? 'deleted' : status;
+}
+
+function decodeGitHubContent(encodedContent) {
+  if (!encodedContent) return null;
+
+  const text = Buffer.from(encodedContent.replace(/\n/g, ''), 'base64').toString('utf-8');
+
+  // Skip obvious binary payloads so the analyzer does not scan gibberish.
+  if (text.includes('\u0000')) {
+    return null;
+  }
+
+  return text;
+}
+
+async function getPullRequestRefs({ owner, repo, pullNumber }) {
+  const { data } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: pullNumber
+  });
+
+  return {
+    headRef: data.head.ref,
+    headSha: data.head.sha
+  };
+}
+
+async function getFileContentAtRef({ owner, repo, path, ref }) {
+  try {
+    const { data } = await octokit.rest.repos.getContent({
+      owner,
+      repo,
+      path,
+      ref
+    });
+
+    if (Array.isArray(data) || data.type !== 'file') {
+      return null;
+    }
+
+    return decodeGitHubContent(data.content);
+  } catch (err) {
+    const status = err?.status || err?.response?.status;
+
+    if (status === 404 || status === 422) {
+      return null;
+    }
+
+    console.warn(`[GitHub] Failed to fetch file contents for ${path}@${ref}: ${err.message}`);
+    return null;
+  }
+}
+
 export async function getPullRequestFiles({ owner, repo, pullNumber, maxPages = 10 }) {
   if (!process.env.GITHUB_TOKEN) {
     throw new Error('GITHUB_TOKEN is not set in environment');
   }
 
+  const refs = await getPullRequestRefs({ owner, repo, pullNumber });
   const allFiles = [];
   let page = 1;
 
@@ -30,14 +87,31 @@ export async function getPullRequestFiles({ owner, repo, pullNumber, maxPages = 
     page += 1;
   }
 
-  return allFiles.map((file) => ({
-    filename: file.filename,
-    status: file.status,
-    additions: file.additions,
-    deletions: file.deletions,
-    changes: file.changes,
-    patch: file.patch
-  }));
+  return Promise.all(
+    allFiles.map(async (file) => {
+      const status = normalizeFileStatus(file.status);
+      const enrichedFile = {
+        filename: file.filename,
+        previousFilename: file.previous_filename || null,
+        status,
+        additions: file.additions,
+        deletions: file.deletions,
+        changes: file.changes,
+        patch: file.patch || null
+      };
+
+      if (status === 'added' || (!enrichedFile.patch && status !== 'deleted')) {
+        enrichedFile.content = await getFileContentAtRef({
+          owner,
+          repo,
+          path: file.filename,
+          ref: refs.headSha
+        });
+      }
+
+      return enrichedFile;
+    })
+  );
 }
 
 
@@ -112,14 +186,10 @@ export function buildReviewBody({ summary, issues, riskScore }) {
  * Get branch and head info for a PR.
  */
 export async function getPullRequestBranch({ owner, repo, pullNumber }) {
-  const { data } = await octokit.rest.pulls.get({
-    owner,
-    repo,
-    pull_number: pullNumber
-  });
+  const { headRef, headSha } = await getPullRequestRefs({ owner, repo, pullNumber });
   return {
-    ref: data.head.ref,
-    sha: data.head.sha
+    ref: headRef,
+    sha: headSha
   };
 }
 

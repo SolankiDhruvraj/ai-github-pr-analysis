@@ -406,13 +406,13 @@ function App() {
                   <aside className="space-y-6">
                     <div className="sticky top-8 space-y-6">
                       <div className="glass-panel p-5 rounded-3xl space-y-4">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Modified Assets</h4>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Changed Assets</h4>
                         <div className="space-y-2">
                           {selectedReview.files.map((file) => (
                             <div key={file.filename} className="bg-slate-900/40 border border-slate-800/50 p-3 rounded-2xl group hover:border-emerald-500/30 transition-all">
                               <div className="flex justify-between items-center mb-2">
                                 <span className="text-[0.65rem] font-mono text-slate-300 truncate max-w-[150px]">{file.filename}</span>
-                                <span className={`text-[0.55rem] font-bold uppercase px-1.5 py-0.5 rounded ${file.status === 'modified' ? 'text-sky-400 bg-sky-500/10' : file.status === 'added' ? 'text-emerald-400 bg-emerald-500/10' : 'text-rose-400 bg-rose-500/10'}`}>{file.status}</span>
+                                <span className={`text-[0.55rem] font-bold uppercase px-1.5 py-0.5 rounded ${file.status === 'modified' ? 'text-sky-400 bg-sky-500/10' : file.status === 'added' ? 'text-emerald-400 bg-emerald-500/10' : file.status === 'deleted' ? 'text-rose-400 bg-rose-500/10' : 'text-amber-400 bg-amber-500/10'}`}>{file.status}</span>
                               </div>
                               <div className="flex items-center justify-between">
                                 <div className="flex gap-2 text-[0.6rem] font-bold">

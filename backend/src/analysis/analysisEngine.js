@@ -6,14 +6,51 @@ const SEVERITY = {
 
 let issueCounter = 1;
 
-/**
- * Extract the first few lines from a patch that match a given regex.
- * Falls back to returning the first N added/changed lines if no specific match.
- */
-function extractSnippet(patch, matchRegex, maxLines = 8) {
-  if (!patch) return null;
+function normalizeFileStatus(status) {
+  return status === 'removed' ? 'deleted' : status;
+}
 
-  const lines = patch.split('\n');
+function shouldAnalyzeFile(file) {
+  return normalizeFileStatus(file.status) !== 'deleted';
+}
+
+function getDiffLines(patch, prefix) {
+  if (!patch) return [];
+
+  const headerPrefix = prefix.repeat(3);
+
+  return patch
+    .split('\n')
+    .filter((line) => line.startsWith(prefix) && !line.startsWith(headerPrefix))
+    .map((line) => line.slice(1));
+}
+
+function getRelevantLines(file) {
+  if (!shouldAnalyzeFile(file)) return [];
+
+  const addedLines = getDiffLines(file.patch || '', '+');
+  if (addedLines.length > 0) {
+    return addedLines;
+  }
+
+  if (file.content) {
+    return file.content.split('\n');
+  }
+
+  return [];
+}
+
+function getRelevantContent(file) {
+  return getRelevantLines(file).join('\n').trim();
+}
+
+/**
+ * Extract the first few lines from the analyzable content.
+ * Falls back to returning the first N relevant lines if no specific match.
+ */
+function extractSnippet(file, matchRegex, maxLines = 8) {
+  const lines = getRelevantLines(file);
+  if (!lines.length) return null;
 
   // Try to find lines around the first regex match
   if (matchRegex) {
@@ -23,17 +60,15 @@ function extractSnippet(patch, matchRegex, maxLines = 8) {
       const end = Math.min(lines.length, matchIdx + maxLines);
       return lines
         .slice(start, end)
-        .map((l) => l.replace(/^[+\- ]/, '')) // strip diff prefixes
         .join('\n')
         .trim();
     }
   }
 
-  // Fallback: return the first maxLines added/changed lines
+  // Fallback: return the first maxLines analyzable lines
   return lines
-    .filter((l) => l.startsWith('+') && !l.startsWith('++'))
+    .filter((l) => l.trim().length > 0)
     .slice(0, maxLines)
-    .map((l) => l.slice(1))
     .join('\n')
     .trim() || null;
 }
@@ -152,33 +187,21 @@ function makeIssue(partial) {
     id: `ISSUE_${issueCounter++}`,
     severity: SEVERITY.LOW,
     codeSnippet: null,
-    fixCode: null,
     ...partial
   };
 
   // Auto-generate fix code if not explicitly provided
-  if (!base.fixCode) {
+  if (!Object.prototype.hasOwnProperty.call(partial, 'fixCode')) {
     base.fixCode = generateFixCode(base.type, base.codeSnippet);
   }
 
   return base;
 }
 
-
-function getAddedContent(patch) {
-  if (!patch) return '';
-  return patch
-    .split('\n')
-    .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-    .map((l) => l.slice(1))
-    .join('\n');
-}
-
 function detectBugAndLogicIssues(file) {
   const issues = [];
-  const patch = file.patch || '';
-  if (!patch) return issues;
-  const addedContent = getAddedContent(patch);
+  const analyzableContent = getRelevantContent(file);
+  if (!analyzableContent) return issues;
 
   // Safe objects that should never be flagged for property access:
   // built-ins, Node modules, common framework objects, well-known APIs
@@ -200,7 +223,7 @@ function detectBugAndLogicIssues(file) {
     'describe', 'it', 'test', 'expect', 'jest', 'vi', 'beforeEach', 'afterEach',
   ]);
 
-  const addedLines = addedContent.split('\n');
+  const addedLines = analyzableContent.split('\n');
 
   // Pattern 1: deep chain — obj.prop.subprop (two or more dots) without optional chaining
   // e.g. user.address.city  →  risky if user could be null
@@ -245,7 +268,7 @@ function detectBugAndLogicIssues(file) {
     );
   }
 
-  if (/\b(for|while)\s*\([^<>=]*<=\s*length\b/.test(addedContent)) {
+  if (/\b(for|while)\s*\([^<>=]*<=\s*length\b/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'BUG_LOGIC',
@@ -255,12 +278,12 @@ function detectBugAndLogicIssues(file) {
         message:
           'Loop condition uses <= length and may be off-by-one and access out-of-bounds.',
         suggestion: 'Use < length instead of <= length for zero-based arrays.',
-        codeSnippet: extractSnippet(patch, /\b(for|while)\s*\([^<>=]*<=\s*length\b/)
+        codeSnippet: extractSnippet(file, /\b(for|while)\s*\([^<>=]*<=\s*length\b/)
       })
     );
   }
 
-  if (/\.then\(/.test(addedContent) && !/\.catch\(/.test(addedContent)) {
+  if (/\.then\(/.test(analyzableContent) && !/\.catch\(/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'BUG_LOGIC',
@@ -270,7 +293,7 @@ function detectBugAndLogicIssues(file) {
         message:
           'Promise chain uses .then without .catch. Rejections may be unhandled.',
         suggestion: 'Add a .catch handler or use try/catch with async/await.',
-        codeSnippet: extractSnippet(patch, /\.then\(/)
+        codeSnippet: extractSnippet(file, /\.then\(/)
       })
     );
   }
@@ -280,11 +303,10 @@ function detectBugAndLogicIssues(file) {
 
 function detectSecurityIssues(file) {
   const issues = [];
-  const patch = file.patch || '';
-  if (!patch) return issues;
-  const addedContent = getAddedContent(patch);
+  const analyzableContent = getRelevantContent(file);
+  if (!analyzableContent) return issues;
 
-  if (/\beval\s*\(/.test(addedContent)) {
+  if (/\beval\s*\(/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -293,12 +315,12 @@ function detectSecurityIssues(file) {
         file: file.filename,
         message: 'Use of eval() is dangerous and can lead to code injection.',
         suggestion: 'Avoid eval(). Use safer alternatives like JSON.parse or functions.',
-        codeSnippet: extractSnippet(patch, /\beval\s*\(/)
+        codeSnippet: extractSnippet(file, /\beval\s*\(/)
       })
     );
   }
 
-  if (/\b(exec|spawn|execFile)\s*\(/.test(addedContent)) {
+  if (/\b(exec|spawn|execFile)\s*\(/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -309,12 +331,12 @@ function detectSecurityIssues(file) {
           'Use of child_process with dynamic input can lead to command injection.',
         suggestion:
           'Avoid shell interpolation. Use argument arrays and validate user input.',
-        codeSnippet: extractSnippet(patch, /\b(exec|spawn|execFile)\s*\(/)
+        codeSnippet: extractSnippet(file, /\b(exec|spawn|execFile)\s*\(/)
       })
     );
   }
 
-  if (/\b(db|query|execute|sql)\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`/.test(addedContent)) {
+  if (/\b(db|query|execute|sql)\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -324,12 +346,12 @@ function detectSecurityIssues(file) {
         message:
           'SQL query built via string interpolation with variables; susceptible to SQL injection.',
         suggestion: 'Use parameterized queries or ORM query builders.',
-        codeSnippet: extractSnippet(patch, /\b(db|query|execute|sql)\s*\(/)
+        codeSnippet: extractSnippet(file, /\b(db|query|execute|sql)\s*\(/)
       })
     );
   }
 
-  if (/(secret|password|token|apikey).*['"][a-zA-Z0-9_-]+['"]/i.test(addedContent)) {
+  if (/(secret|password|token|apikey).*['"][a-zA-Z0-9_-]+['"]/i.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -339,12 +361,12 @@ function detectSecurityIssues(file) {
         message:
           'Possible hardcoded secret detected. Secrets should not be committed to source control.',
         suggestion: 'Move secrets to environment variables or a secret manager.',
-        codeSnippet: extractSnippet(patch, /(secret|password|token|apiKey).*['"][^'"]+['"]$/i)
+        codeSnippet: extractSnippet(file, /(secret|password|token|apiKey).*['"][^'"]+['"]$/i)
       })
     );
   }
 
-  if (/innerHTML\s*=\s*[^;]+(req\.|request\.|body|query|params)/.test(addedContent)) {
+  if (/innerHTML\s*=\s*[^;]+(req\.|request\.|body|query|params)/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -355,7 +377,7 @@ function detectSecurityIssues(file) {
           'Assignment to innerHTML using untrusted input may lead to XSS vulnerabilities.',
         suggestion:
           'Sanitize user input or use textContent/escaping instead of innerHTML.',
-        codeSnippet: extractSnippet(patch, /innerHTML\s*=/)
+        codeSnippet: extractSnippet(file, /innerHTML\s*=/)
       })
     );
   }
@@ -365,13 +387,12 @@ function detectSecurityIssues(file) {
 
 function detectPerformanceIssues(file) {
   const issues = [];
-  const patch = file.patch || '';
-  if (!patch) return issues;
-  const addedContent = getAddedContent(patch);
+  const analyzableContent = getRelevantContent(file);
+  if (!analyzableContent) return issues;
 
   const nestedLoopRegex =
     /\b(for|while)\b[\s\S]{0,120}\b(for|while)\b[\s\S]{0,120}\b(for|while)\b/;
-  if (nestedLoopRegex.test(addedContent)) {
+  if (nestedLoopRegex.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'PERFORMANCE',
@@ -382,12 +403,12 @@ function detectPerformanceIssues(file) {
           'Deeply nested loops detected, which may have O(n²) or worse complexity.',
         suggestion:
           'Consider refactoring algorithms or using more efficient data structures.',
-        codeSnippet: extractSnippet(patch, /\b(for|while)\b/)
+        codeSnippet: extractSnippet(file, /\b(for|while)\b/)
       })
     );
   }
 
-  if (/for\s*\([^)]*\)\s*{[\s\S]{0,80}\b(await|fs\.(readFileSync|writeFileSync)|execSync)\b/.test(addedContent)) {
+  if (/for\s*\([^)]*\)\s*{[\s\S]{0,80}\b(await|fs\.(readFileSync|writeFileSync)|execSync)\b/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'PERFORMANCE',
@@ -398,7 +419,7 @@ function detectPerformanceIssues(file) {
           'Blocking/synchronous operations detected inside a loop. This can severely impact performance.',
         suggestion:
           'Move blocking operations outside the loop or use batched/async alternatives.',
-        codeSnippet: extractSnippet(patch, /\b(await|readFileSync|writeFileSync|execSync)\b/)
+        codeSnippet: extractSnippet(file, /\b(await|readFileSync|writeFileSync|execSync)\b/)
       })
     );
   }
@@ -408,13 +429,12 @@ function detectPerformanceIssues(file) {
 
 function detectCodeSmells(file) {
   const issues = [];
-  const patch = file.patch || '';
-  if (!patch) return issues;
-  const addedContent = getAddedContent(patch);
+  const analyzableContent = getRelevantContent(file);
+  if (!analyzableContent) return issues;
 
   const longFunctionRegex =
     /function\s+[a-zA-Z_$][\w$]*\s*\([^)]*\)\s*{([\s\S]{400,})}/;
-  if (longFunctionRegex.test(addedContent)) {
+  if (longFunctionRegex.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'CODE_SMELL',
@@ -425,13 +445,13 @@ function detectCodeSmells(file) {
           'Very large function detected in patch, which may be hard to read and maintain.',
         suggestion:
           'Extract smaller helper functions and reduce the size of this function.',
-        codeSnippet: extractSnippet(patch, /\bfunction\s+[a-zA-Z_$][\w$]*\s*\(/)
+        codeSnippet: extractSnippet(file, /\bfunction\s+[a-zA-Z_$][\w$]*\s*\(/)
       })
     );
   }
 
   const deepNestingRegex = /{[\s\S]{0,40}{[\s\S]{0,40}{[\s\S]{0,40}{/;
-  if (deepNestingRegex.test(addedContent)) {
+  if (deepNestingRegex.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'CODE_SMELL',
@@ -442,12 +462,12 @@ function detectCodeSmells(file) {
           'Deeply nested blocks detected, which can hurt readability and maintainability.',
         suggestion:
           'Refactor nested logic into early returns or smaller functions.',
-        codeSnippet: extractSnippet(patch, null)
+        codeSnippet: extractSnippet(file, null)
       })
     );
   }
 
-  if (/(function|const|let|var)\s+[a-zA-Z_$][\w$]*\s*\([^)]{80,}\)/.test(addedContent)) {
+  if (/(function|const|let|var)\s+[a-zA-Z_$][\w$]*\s*\([^)]{80,}\)/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'CODE_SMELL',
@@ -457,7 +477,7 @@ function detectCodeSmells(file) {
         message: 'Function with many parameters detected.',
         suggestion:
           'Prefer using an options object or smaller focused functions instead of many parameters.',
-        codeSnippet: extractSnippet(patch, /(function|const|let|var)\s+[a-zA-Z_$][\w$]*\s*\([^)]{80,}\)/)
+        codeSnippet: extractSnippet(file, /(function|const|let|var)\s+[a-zA-Z_$][\w$]*\s*\([^)]{80,}\)/)
       })
     );
   }
@@ -467,13 +487,12 @@ function detectCodeSmells(file) {
 
 function detectCyclomaticComplexity(file) {
   const issues = [];
-  const patch = file.patch || '';
-  if (!patch) return issues;
-  const addedContent = getAddedContent(patch);
+  const analyzableContent = getRelevantContent(file);
+  if (!analyzableContent) return issues;
 
   const branchKeywords =
     /\b(if|for|while|case|catch|&&|\|\||\?|switch)\b/g;
-  const matches = addedContent.match(branchKeywords);
+  const matches = analyzableContent.match(branchKeywords);
   const complexity = (matches?.length || 0) + 1;
 
   if (complexity > 15) {
@@ -486,7 +505,7 @@ function detectCyclomaticComplexity(file) {
         message: `Function or block with high inferred cyclomatic complexity (~${complexity}).`,
         suggestion:
           'Break complex logic into smaller functions and reduce branching where possible.',
-        codeSnippet: extractSnippet(patch, /\b(if|for|while|switch|case|catch)\b/)
+        codeSnippet: extractSnippet(file, /\b(if|for|while|switch|case|catch)\b/)
       })
     );
   }
@@ -496,6 +515,7 @@ function detectCyclomaticComplexity(file) {
 
 function detectDependencyVulnerabilities(file) {
   const issues = [];
+  if (!shouldAnalyzeFile(file)) return issues;
 
   if (
     file.filename.endsWith('package.json') ||
@@ -521,13 +541,12 @@ function detectDependencyVulnerabilities(file) {
 
 function detectInputValidationIssues(file) {
   const issues = [];
-  const patch = file.patch || '';
-  if (!patch) return issues;
-  const addedContent = getAddedContent(patch);
+  const analyzableContent = getRelevantContent(file);
+  if (!analyzableContent) return issues;
 
   if (
-    /(req\.body|req\.query|req\.params|ctx\.request\.body)/.test(addedContent) &&
-    !/(zod|joi|yup|celebrate|express-validator)/.test(addedContent)
+    /(req\.body|req\.query|req\.params|ctx\.request\.body)/.test(analyzableContent) &&
+    !/(zod|joi|yup|celebrate|express-validator)/.test(analyzableContent)
   ) {
     issues.push(
       makeIssue({
@@ -539,7 +558,7 @@ function detectInputValidationIssues(file) {
           'Request data is used but no explicit validation library usage detected nearby.',
         suggestion:
           'Validate incoming data using a schema validation library (zod, joi, yup, etc.).',
-        codeSnippet: extractSnippet(patch, /(req\.body|req\.query|req\.params)/)
+        codeSnippet: extractSnippet(file, /(req\.body|req\.query|req\.params)/)
       })
     );
   }
@@ -549,11 +568,10 @@ function detectInputValidationIssues(file) {
 
 function detectErrorHandlingIssues(file) {
   const issues = [];
-  const patch = file.patch || '';
-  if (!patch) return issues;
-  const addedContent = getAddedContent(patch);
+  const analyzableContent = getRelevantContent(file);
+  if (!analyzableContent) return issues;
 
-  if (/\basync\s+function[\s\S]+await[\s\S]+{[\s\S]+}\s*$/.test(addedContent) && !/try\s*{[\s\S]*catch\s*\(/.test(addedContent)) {
+  if (/\basync\s+function[\s\S]+await[\s\S]+{[\s\S]+}\s*$/.test(analyzableContent) && !/try\s*{[\s\S]*catch\s*\(/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'ERROR_HANDLING',
@@ -564,12 +582,12 @@ function detectErrorHandlingIssues(file) {
           'Async function with await detected but no try/catch in the patched code.',
         suggestion:
           'Wrap critical await calls in try/catch and propagate or log errors appropriately.',
-        codeSnippet: extractSnippet(patch, /\bawait\b/)
+        codeSnippet: extractSnippet(file, /\bawait\b/)
       })
     );
   }
 
-  if (/catch\s*\(\s*\)\s*{[^}]*}/.test(addedContent)) {
+  if (/catch\s*\(\s*\)\s*{[^}]*}/.test(analyzableContent)) {
     issues.push(
       makeIssue({
         category: 'ERROR_HANDLING',
@@ -580,7 +598,7 @@ function detectErrorHandlingIssues(file) {
           'Catch block appears to ignore the error (empty or no logging/handling).',
         suggestion:
           'Log or rethrow errors in catch blocks to avoid silent failures.',
-        codeSnippet: extractSnippet(patch, /catch\s*\(/)
+        codeSnippet: extractSnippet(file, /catch\s*\(/)
       })
     );
   }
@@ -593,12 +611,10 @@ function detectCodeDuplication(files) {
   const snippetMap = new Map();
 
   files.forEach((file) => {
-    const patch = file.patch || '';
-    if (!patch) return;
+    if (!shouldAnalyzeFile(file)) return;
 
-    const lines = patch
-      .split('\n')
-      .map((line) => line.replace(/^[-+]/, '').trim())
+    const lines = getRelevantLines(file)
+      .map((line) => line.trim())
       .filter((line) => line.length > 20);
 
     lines.forEach((line) => {
@@ -681,4 +697,3 @@ export function runAllAnalyses(files) {
     summary
   };
 }
-
