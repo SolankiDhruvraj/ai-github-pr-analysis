@@ -10,7 +10,15 @@
   --glass-highlight: rgba(255, 255, 255, 0.03);
 }
 
+html,
+body,
+#root {
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
 body {
+  margin: 0;
   font-family: 'Outfit', sans-serif;
   background-color: var(--bg-main);
   background-image:

@@ -74,7 +74,7 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen p-4 md:p-8 animate-fade-in">
+    <div className="min-h-screen overflow-x-hidden p-4 md:p-8 animate-fade-in">
       <div className="mx-auto max-w-7xl">
         <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
@@ -156,9 +156,9 @@ function App() {
           )}
         </section>
 
-        <main className="grid gap-8 lg:grid-cols-[380px_1fr]">
+        <main className="grid gap-8 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
           {/* ── Left Side: PR Selection ── */}
-          <aside className="space-y-4">
+          <aside className="min-w-0 space-y-4">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-slate-200">Recent Audits</h3>
               <button
@@ -223,7 +223,7 @@ function App() {
           </aside>
 
           {/* ── Right Side: Review Details ── */}
-          <section className="space-y-6">
+          <section className="min-w-0 space-y-6">
             {!selectedReview ? (
               <div className="h-full flex flex-col items-center justify-center glass-panel rounded-3xl p-12 text-center text-slate-500 space-y-4">
                 <div className="w-16 h-16 rounded-3xl bg-slate-900 flex items-center justify-center text-3xl opacity-50">📂</div>
@@ -312,9 +312,9 @@ function App() {
                   </div>
                 )}
 
-                <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
+                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
                   {/* Main Issues Area */}
-                  <div className="space-y-4">
+                  <div className="min-w-0 space-y-4">
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Detected Vulnerabilities</h4>
 
                     {selectedReview.issues.length === 0 ? (
@@ -420,7 +420,7 @@ function App() {
                   </div>
 
                   {/* Right Sidebar Audit Meta */}
-                  <aside className="space-y-6">
+                  <aside className="min-w-0 space-y-6">
                     <div className="sticky top-8 space-y-6">
                       <div className="glass-panel p-5 rounded-3xl space-y-4">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Changed Assets</h4>
@@ -428,7 +428,7 @@ function App() {
                           {selectedReview.files.map((file) => (
                             <div key={file.filename} className="bg-slate-900/40 border border-slate-800/50 p-3 rounded-2xl group hover:border-emerald-500/30 transition-all">
                               <div className="flex justify-between items-center mb-2">
-                                <span className="text-[0.65rem] font-mono text-slate-300 truncate max-w-[150px]">{file.filename}</span>
+                                <span className="min-w-0 flex-1 pr-2 text-[0.65rem] font-mono text-slate-300 break-all">{file.filename}</span>
                                 <span className={`text-[0.55rem] font-bold uppercase px-1.5 py-0.5 rounded ${file.status === 'modified' ? 'text-sky-400 bg-sky-500/10' : file.status === 'added' ? 'text-emerald-400 bg-emerald-500/10' : file.status === 'deleted' ? 'text-rose-400 bg-rose-500/10' : 'text-amber-400 bg-amber-500/10'}`}>{file.status}</span>
                               </div>
                               <div className="flex items-center justify-between">
