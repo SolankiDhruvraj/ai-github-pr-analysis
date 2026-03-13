@@ -28,6 +28,16 @@ function App() {
     dispatch(fetchReviews());
   }, [dispatch]);
 
+  // Auto-poll if the currently selected review is completely PENDING
+  useEffect(() => {
+    if (selectedReview?.status === 'PENDING') {
+      const interval = setInterval(() => {
+        dispatch(fetchReviews());
+      }, 3000); // Poll every 3 seconds
+      return () => clearInterval(interval);
+    }
+  }, [dispatch, selectedReview?.status]);
+
   const handleApplyFix = (issue) => {
     dispatch(applyIssueFix({
       owner: selectedReview.owner,
