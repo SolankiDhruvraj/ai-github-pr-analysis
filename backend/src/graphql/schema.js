@@ -50,6 +50,7 @@ export const typeDefs = `#graphql
     repo: String!
     number: Int!
     status: String!
+    errorMessage: String
     createdAt: String!
     updatedAt: String!
     files: [PullRequestFile!]!
@@ -93,4 +94,3 @@ export const resolvers = {
     }
   }
 };
-

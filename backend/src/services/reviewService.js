@@ -12,6 +12,42 @@ import prisma from '../db/prisma.js';
 // In-memory fallback for when Redis is unavailable
 const inMemoryReviews = new Map();
 
+function emptySummary() {
+  return {
+    totalIssues: 0,
+    riskScore: 0,
+    severityDistribution: { HIGH: 0, MEDIUM: 0, LOW: 0 },
+    filesAffected: []
+  };
+}
+
+function formatErrorMessage(err) {
+  if (!err) return 'Unknown error';
+
+  const status = err.status || err.response?.status;
+  const base = err.message || 'Unknown error';
+
+  return status ? `GitHub/API error ${status}: ${base}` : base;
+}
+
+function buildErrorReview({ owner, repo, pullNumber, startedAt, files = [], issues = [], summary = emptySummary(), errorMessage = null }) {
+  return {
+    id: makeKey(owner, repo, pullNumber),
+    owner,
+    repo,
+    number: pullNumber,
+    status: 'ERROR',
+    createdAt: startedAt,
+    updatedAt: new Date().toISOString(),
+    files,
+    issues,
+    summary,
+    errorMessage,
+    githubReviewStatus: 'ERROR',
+    githubReviewUrl: null
+  };
+}
+
 function makeKey(owner, repo, pullNumber) {
   return `${owner}/${repo}#${pullNumber}`;
 }
@@ -26,16 +62,25 @@ function shouldAutoReject(summary) {
 export async function processReview({ owner, repo, pullNumber, startedAt }) {
   console.log(`[Processor] Processing PR #${pullNumber} in ${owner}/${repo}`);
 
+  let files = [];
+  let analysisResult = { issues: [], summary: emptySummary() };
+
   try {
-    const files = await getPullRequestFiles({ owner, repo, pullNumber });
-    const analysisResult = runAllAnalyses(files);
-    const issuesWithAI = await enrichIssuesWithAI({
-      owner,
-      repo,
-      number: pullNumber,
-      files,
-      issues: analysisResult.issues
-    });
+    files = await getPullRequestFiles({ owner, repo, pullNumber });
+    analysisResult = runAllAnalyses(files);
+
+    let issuesWithAI = analysisResult.issues;
+    try {
+      issuesWithAI = await enrichIssuesWithAI({
+        owner,
+        repo,
+        number: pullNumber,
+        files,
+        issues: analysisResult.issues
+      });
+    } catch (err) {
+      console.error(`[Processor] AI enrichment failed for PR #${pullNumber}:`, err.message);
+    }
 
     let githubReviewStatus = 'SKIPPED';
     let githubReviewUrl = null;
@@ -74,30 +119,22 @@ export async function processReview({ owner, repo, pullNumber, startedAt }) {
       files,
       issues: issuesWithAI,
       summary: analysisResult.summary,
+      errorMessage: null,
       githubReviewStatus,
       githubReviewUrl
     };
   } catch (err) {
     console.error(`[Processor] Error:`, err);
-    return {
-      id: makeKey(owner, repo, pullNumber),
+    return buildErrorReview({
       owner,
       repo,
-      number: pullNumber,
-      status: 'ERROR',
-      createdAt: startedAt,
-      updatedAt: new Date().toISOString(),
-      files: [],
-      issues: [],
-      summary: {
-        totalIssues: 0,
-        riskScore: 0,
-        severityDistribution: { HIGH: 0, MEDIUM: 0, LOW: 0 },
-        filesAffected: []
-      },
-      githubReviewStatus: 'ERROR',
-      githubReviewUrl: null
-    };
+      pullNumber,
+      startedAt,
+      files,
+      issues: analysisResult.issues,
+      summary: analysisResult.summary,
+      errorMessage: formatErrorMessage(err)
+    });
   }
 }
 
@@ -115,12 +152,8 @@ export async function startReviewForPullRequest({ owner, repo, pullNumber }) {
     updatedAt: startedAt,
     files: [],
     issues: [],
-    summary: {
-      totalIssues: 0,
-      riskScore: 0,
-      severityDistribution: { HIGH: 0, MEDIUM: 0, LOW: 0 },
-      filesAffected: []
-    },
+    summary: emptySummary(),
+    errorMessage: null,
     githubReviewStatus: null,
     githubReviewUrl: null
   };

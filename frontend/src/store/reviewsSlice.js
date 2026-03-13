@@ -6,7 +6,7 @@ export const fetchReviews = createAsyncThunk('reviews/fetchReviews', async () =>
   const query = `
     query RecentReviews($limit: Int) {
       recentReviews(limit: $limit) {
-        id owner repo number status createdAt githubReviewStatus githubReviewUrl
+        id owner repo number status errorMessage createdAt githubReviewStatus githubReviewUrl
         summary { totalIssues riskScore severityDistribution { HIGH MEDIUM LOW } filesAffected }
         files { filename status additions deletions changes patch }
         issues { id category type severity file message suggestion codeSnippet fixCode aiExplanation aiFixSuggestion aiFixCode aiSuggestedTests }
