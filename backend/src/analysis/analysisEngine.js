@@ -165,11 +165,20 @@ function makeIssue(partial) {
 }
 
 
+function getAddedContent(patch) {
+  if (!patch) return '';
+  return patch
+    .split('\n')
+    .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+    .map((l) => l.slice(1))
+    .join('\n');
+}
+
 function detectBugAndLogicIssues(file) {
   const issues = [];
   const patch = file.patch || '';
-
   if (!patch) return issues;
+  const addedContent = getAddedContent(patch);
 
   // Safe objects that should never be flagged for property access:
   // built-ins, Node modules, common framework objects, well-known APIs
@@ -191,10 +200,7 @@ function detectBugAndLogicIssues(file) {
     'describe', 'it', 'test', 'expect', 'jest', 'vi', 'beforeEach', 'afterEach',
   ]);
 
-  const addedLines = patch
-    .split('\n')
-    .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
-    .map((l) => l.slice(1));
+  const addedLines = addedContent.split('\n');
 
   // Pattern 1: deep chain — obj.prop.subprop (two or more dots) without optional chaining
   // e.g. user.address.city  →  risky if user could be null
@@ -239,7 +245,7 @@ function detectBugAndLogicIssues(file) {
     );
   }
 
-  if (/\b(for|while)\s*\([^<>=]*<=\s*length\b/.test(patch)) {
+  if (/\b(for|while)\s*\([^<>=]*<=\s*length\b/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'BUG_LOGIC',
@@ -254,7 +260,7 @@ function detectBugAndLogicIssues(file) {
     );
   }
 
-  if (/\.then\(/.test(patch) && !/\.catch\(/.test(patch)) {
+  if (/\.then\(/.test(addedContent) && !/\.catch\(/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'BUG_LOGIC',
@@ -276,8 +282,9 @@ function detectSecurityIssues(file) {
   const issues = [];
   const patch = file.patch || '';
   if (!patch) return issues;
+  const addedContent = getAddedContent(patch);
 
-  if (/\beval\s*\(/.test(patch)) {
+  if (/\beval\s*\(/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -291,7 +298,7 @@ function detectSecurityIssues(file) {
     );
   }
 
-  if (/\bchild_process\.(exec|spawn|execFile)\s*\(/.test(patch)) {
+  if (/\b(exec|spawn|execFile)\s*\(/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -302,12 +309,12 @@ function detectSecurityIssues(file) {
           'Use of child_process with dynamic input can lead to command injection.',
         suggestion:
           'Avoid shell interpolation. Use argument arrays and validate user input.',
-        codeSnippet: extractSnippet(patch, /\bchild_process\.(exec|spawn|execFile)\s*\(/)
+        codeSnippet: extractSnippet(patch, /\b(exec|spawn|execFile)\s*\(/)
       })
     );
   }
 
-  if (/\b(db|query|execute)\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`/.test(patch)) {
+  if (/\b(db|query|execute|sql)\s*\(\s*`[^`]*\$\{[^}]+\}[^`]*`/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -317,12 +324,12 @@ function detectSecurityIssues(file) {
         message:
           'SQL query built via string interpolation with variables; susceptible to SQL injection.',
         suggestion: 'Use parameterized queries or ORM query builders.',
-        codeSnippet: extractSnippet(patch, /\b(db|query|execute)\s*\(/)
+        codeSnippet: extractSnippet(patch, /\b(db|query|execute|sql)\s*\(/)
       })
     );
   }
 
-  if (/\b(secret|password|token|apiKey)\b.*['"][^'"]+['"]/i.test(patch)) {
+  if (/(secret|password|token|apikey).*['"][a-zA-Z0-9_-]+['"]/i.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -332,12 +339,12 @@ function detectSecurityIssues(file) {
         message:
           'Possible hardcoded secret detected. Secrets should not be committed to source control.',
         suggestion: 'Move secrets to environment variables or a secret manager.',
-        codeSnippet: extractSnippet(patch, /\b(secret|password|token|apiKey)\b.*['"][^'"]+['"]$/i)
+        codeSnippet: extractSnippet(patch, /(secret|password|token|apiKey).*['"][^'"]+['"]$/i)
       })
     );
   }
 
-  if (/\binnerHTML\s*=\s*[^;]+(req\.|request\.|body|query|params)/.test(patch)) {
+  if (/innerHTML\s*=\s*[^;]+(req\.|request\.|body|query|params)/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'SECURITY',
@@ -348,7 +355,7 @@ function detectSecurityIssues(file) {
           'Assignment to innerHTML using untrusted input may lead to XSS vulnerabilities.',
         suggestion:
           'Sanitize user input or use textContent/escaping instead of innerHTML.',
-        codeSnippet: extractSnippet(patch, /\binnerHTML\s*=/)
+        codeSnippet: extractSnippet(patch, /innerHTML\s*=/)
       })
     );
   }
@@ -360,10 +367,11 @@ function detectPerformanceIssues(file) {
   const issues = [];
   const patch = file.patch || '';
   if (!patch) return issues;
+  const addedContent = getAddedContent(patch);
 
   const nestedLoopRegex =
     /\b(for|while)\b[\s\S]{0,120}\b(for|while)\b[\s\S]{0,120}\b(for|while)\b/;
-  if (nestedLoopRegex.test(patch)) {
+  if (nestedLoopRegex.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'PERFORMANCE',
@@ -379,7 +387,7 @@ function detectPerformanceIssues(file) {
     );
   }
 
-  if (/for\s*\([^)]*\)\s*{[\s\S]{0,80}\b(await|fs\.(readFileSync|writeFileSync)|execSync)\b/.test(patch)) {
+  if (/for\s*\([^)]*\)\s*{[\s\S]{0,80}\b(await|fs\.(readFileSync|writeFileSync)|execSync)\b/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'PERFORMANCE',
@@ -402,10 +410,11 @@ function detectCodeSmells(file) {
   const issues = [];
   const patch = file.patch || '';
   if (!patch) return issues;
+  const addedContent = getAddedContent(patch);
 
   const longFunctionRegex =
     /function\s+[a-zA-Z_$][\w$]*\s*\([^)]*\)\s*{([\s\S]{400,})}/;
-  if (longFunctionRegex.test(patch)) {
+  if (longFunctionRegex.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'CODE_SMELL',
@@ -422,7 +431,7 @@ function detectCodeSmells(file) {
   }
 
   const deepNestingRegex = /{[\s\S]{0,40}{[\s\S]{0,40}{[\s\S]{0,40}{/;
-  if (deepNestingRegex.test(patch)) {
+  if (deepNestingRegex.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'CODE_SMELL',
@@ -438,7 +447,7 @@ function detectCodeSmells(file) {
     );
   }
 
-  if (/(function|const|let|var)\s+[a-zA-Z_$][\w$]*\s*\([^)]{80,}\)/.test(patch)) {
+  if (/(function|const|let|var)\s+[a-zA-Z_$][\w$]*\s*\([^)]{80,}\)/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'CODE_SMELL',
@@ -460,10 +469,11 @@ function detectCyclomaticComplexity(file) {
   const issues = [];
   const patch = file.patch || '';
   if (!patch) return issues;
+  const addedContent = getAddedContent(patch);
 
   const branchKeywords =
     /\b(if|for|while|case|catch|&&|\|\||\?|switch)\b/g;
-  const matches = patch.match(branchKeywords);
+  const matches = addedContent.match(branchKeywords);
   const complexity = (matches?.length || 0) + 1;
 
   if (complexity > 15) {
@@ -513,10 +523,11 @@ function detectInputValidationIssues(file) {
   const issues = [];
   const patch = file.patch || '';
   if (!patch) return issues;
+  const addedContent = getAddedContent(patch);
 
   if (
-    /(req\.body|req\.query|req\.params|ctx\.request\.body)/.test(patch) &&
-    !/(zod|joi|yup|celebrate|express-validator)/.test(patch)
+    /(req\.body|req\.query|req\.params|ctx\.request\.body)/.test(addedContent) &&
+    !/(zod|joi|yup|celebrate|express-validator)/.test(addedContent)
   ) {
     issues.push(
       makeIssue({
@@ -540,8 +551,9 @@ function detectErrorHandlingIssues(file) {
   const issues = [];
   const patch = file.patch || '';
   if (!patch) return issues;
+  const addedContent = getAddedContent(patch);
 
-  if (/\basync\s+function[\s\S]+await[\s\S]+{[\s\S]+}\s*$/.test(patch) && !/try\s*{[\s\S]*catch\s*\(/.test(patch)) {
+  if (/\basync\s+function[\s\S]+await[\s\S]+{[\s\S]+}\s*$/.test(addedContent) && !/try\s*{[\s\S]*catch\s*\(/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'ERROR_HANDLING',
@@ -557,7 +569,7 @@ function detectErrorHandlingIssues(file) {
     );
   }
 
-  if (/catch\s*\(\s*\)\s*{[^}]*}/.test(patch)) {
+  if (/catch\s*\(\s*\)\s*{[^}]*}/.test(addedContent)) {
     issues.push(
       makeIssue({
         category: 'ERROR_HANDLING',
