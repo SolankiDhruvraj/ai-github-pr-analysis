@@ -75,7 +75,7 @@ function App() {
 
   return (
     <div className="min-h-screen overflow-x-hidden p-4 md:p-8 animate-fade-in">
-      <div className="mx-auto max-w-7xl">
+      <div className="mx-auto w-full max-w-7xl overflow-x-hidden">
         <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
           <div className="space-y-2">
             <h1 className="text-4xl font-bold tracking-tight">
@@ -156,9 +156,9 @@ function App() {
           )}
         </section>
 
-        <main className="grid gap-8 lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
+        <main className="grid w-full min-w-0 gap-8 overflow-x-hidden lg:grid-cols-[minmax(0,380px)_minmax(0,1fr)]">
           {/* ── Left Side: PR Selection ── */}
-          <aside className="min-w-0 space-y-4">
+          <aside className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
             <div className="flex items-center justify-between mb-2">
               <h3 className="font-semibold text-slate-200">Recent Audits</h3>
               <button
@@ -223,7 +223,7 @@ function App() {
           </aside>
 
           {/* ── Right Side: Review Details ── */}
-          <section className="min-w-0 space-y-6">
+          <section className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
             {!selectedReview ? (
               <div className="h-full flex flex-col items-center justify-center glass-panel rounded-3xl p-12 text-center text-slate-500 space-y-4">
                 <div className="w-16 h-16 rounded-3xl bg-slate-900 flex items-center justify-center text-3xl opacity-50">📂</div>
@@ -312,9 +312,9 @@ function App() {
                   </div>
                 )}
 
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
+                <div className="grid w-full min-w-0 gap-6 overflow-x-hidden xl:grid-cols-[minmax(0,1fr)_minmax(0,320px)]">
                   {/* Main Issues Area */}
-                  <div className="min-w-0 space-y-4">
+                  <div className="min-w-0 max-w-full space-y-4 overflow-x-hidden">
                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Detected Vulnerabilities</h4>
 
                     {selectedReview.issues.length === 0 ? (
@@ -325,14 +325,14 @@ function App() {
                       </div>
                     ) : (
                       selectedReview.issues.map((issue) => (
-                        <article key={issue.id} className="glass-panel p-5 rounded-3xl space-y-4 animate-fade-in border-l-4 border-l-slate-700/50 hover:border-l-emerald-500/50 transition-all">
+                        <article key={issue.id} className="glass-panel min-w-0 max-w-full overflow-hidden p-5 rounded-3xl space-y-4 animate-fade-in border-l-4 border-l-slate-700/50 hover:border-l-emerald-500/50 transition-all">
                           <div className="flex justify-between items-start gap-4">
-                            <div className="space-y-1">
+                            <div className="min-w-0 space-y-1">
                               <div className="flex items-center gap-2">
                                 <span className={`w-2 h-2 rounded-full ${issue.severity === 'HIGH' ? 'bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.4)]' : issue.severity === 'MEDIUM' ? 'bg-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.4)]' : 'bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.4)]'}`}></span>
-                                <span className="text-[0.65rem] font-bold uppercase tracking-widest text-slate-400">{issue.category} · {issue.type}</span>
+                                <span className="min-w-0 break-words text-[0.65rem] font-bold uppercase tracking-widest text-slate-400">{issue.category} · {issue.type}</span>
                               </div>
-                              <h5 className="text-sm font-semibold text-slate-100">{issue.message}</h5>
+                              <h5 className="break-words text-sm font-semibold text-slate-100">{issue.message}</h5>
                             </div>
                             <div className={`px-2 py-1 rounded-lg text-[0.6rem] font-bold uppercase ${issue.severity === 'HIGH' ? 'bg-rose-500/10 text-rose-400' : issue.severity === 'MEDIUM' ? 'bg-amber-500/10 text-amber-400' : 'bg-sky-500/10 text-sky-400'}`}>
                               {issue.severity}
@@ -342,11 +342,11 @@ function App() {
                           {issue.codeSnippet && (
                             <div className="space-y-2">
                               <div className="text-[0.65rem] font-bold text-slate-600 uppercase ml-1">Vulnerable Context</div>
-                              <div className="rounded-2xl bg-slate-950 p-4 border border-slate-800/50 relative group">
+                              <div className="relative max-w-full overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-950 p-4 group">
                                 <div className="absolute top-0 right-0 p-2 opacity-30">
                                   <svg className="w-4 h-4 text-rose-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" /></svg>
                                 </div>
-                                <pre className="text-[0.7rem] text-slate-300 leading-6 overflow-x-auto custom-scrollbar"><code>{issue.codeSnippet}</code></pre>
+                                <pre className="max-w-full overflow-x-auto text-[0.7rem] text-slate-300 leading-6 custom-scrollbar"><code>{issue.codeSnippet}</code></pre>
                               </div>
                             </div>
                           )}
@@ -365,7 +365,7 @@ function App() {
                                 <span className="text-[0.6rem] font-bold text-emerald-500 uppercase tracking-widest px-2">Solution Recommendation</span>
                                 <div className="h-[1px] flex-1 bg-slate-800"></div>
                               </div>
-                              <div className="rounded-2xl bg-emerald-950/20 p-4 border border-emerald-500/20 relative">
+                              <div className="relative max-w-full overflow-hidden rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-4">
                                 <div className="absolute top-0 right-0 p-2 opacity-40">
                                   <svg className="w-4 h-4 text-emerald-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
                                 </div>
@@ -391,7 +391,7 @@ function App() {
                                     ⚠️ {fixStatus.error}
                                   </div>
                                 )}
-                                <pre className="text-[0.7rem] text-emerald-100 leading-6 overflow-x-auto custom-scrollbar"><code>{issue.aiFixCode || issue.fixCode}</code></pre>
+                                <pre className="max-w-full overflow-x-auto text-[0.7rem] text-emerald-100 leading-6 custom-scrollbar"><code>{issue.aiFixCode || issue.fixCode}</code></pre>
                               </div>
 
                               {issue.aiSuggestedTests && (
@@ -401,14 +401,14 @@ function App() {
                                     <span className="text-[0.6rem] font-bold text-sky-500 uppercase tracking-widest px-2">Suggested Unit Tests</span>
                                     <div className="h-[1px] flex-1 bg-slate-800"></div>
                                   </div>
-                                  <div className="rounded-2xl bg-sky-950/20 p-4 border border-sky-500/20 relative">
+                                  <div className="relative max-w-full overflow-hidden rounded-2xl border border-sky-500/20 bg-sky-950/20 p-4">
                                     <div className="absolute top-0 right-0 p-2 opacity-40">
                                       <svg className="w-4 h-4 text-sky-500" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" /></svg>
                                     </div>
                                     <div className="text-[0.7rem] text-sky-400 font-bold mb-2 flex items-center gap-1.5 font-mono">
                                       🧪 Automated Test Suite
                                     </div>
-                                    <pre className="text-[0.7rem] text-sky-100 leading-6 overflow-x-auto custom-scrollbar"><code>{issue.aiSuggestedTests}</code></pre>
+                                    <pre className="max-w-full overflow-x-auto text-[0.7rem] text-sky-100 leading-6 custom-scrollbar"><code>{issue.aiSuggestedTests}</code></pre>
                                   </div>
                                 </div>
                               )}
@@ -420,28 +420,28 @@ function App() {
                   </div>
 
                   {/* Right Sidebar Audit Meta */}
-                  <aside className="min-w-0 space-y-6">
-                    <div className="sticky top-8 space-y-6">
-                      <div className="glass-panel p-5 rounded-3xl space-y-4">
+                  <aside className="min-w-0 max-w-full space-y-6 overflow-x-hidden">
+                    <div className="sticky top-8 min-w-0 max-w-full space-y-6">
+                      <div className="glass-panel min-w-0 max-w-full overflow-hidden p-5 rounded-3xl space-y-4">
                         <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Changed Assets</h4>
                         <div className="space-y-2">
                           {selectedReview.files.map((file) => (
-                            <div key={file.filename} className="bg-slate-900/40 border border-slate-800/50 p-3 rounded-2xl group hover:border-emerald-500/30 transition-all">
-                              <div className="flex justify-between items-center mb-2">
-                                <span className="min-w-0 flex-1 pr-2 text-[0.65rem] font-mono text-slate-300 break-all">{file.filename}</span>
-                                <span className={`text-[0.55rem] font-bold uppercase px-1.5 py-0.5 rounded ${file.status === 'modified' ? 'text-sky-400 bg-sky-500/10' : file.status === 'added' ? 'text-emerald-400 bg-emerald-500/10' : file.status === 'deleted' ? 'text-rose-400 bg-rose-500/10' : 'text-amber-400 bg-amber-500/10'}`}>{file.status}</span>
+                            <div key={file.filename} className="max-w-full overflow-hidden rounded-2xl border border-slate-800/50 bg-slate-900/40 p-3 group hover:border-emerald-500/30 transition-all">
+                              <div className="mb-2 flex min-w-0 items-start justify-between gap-2">
+                                <span className="min-w-0 flex-1 overflow-hidden break-all pr-2 text-[0.65rem] font-mono text-slate-300">{file.filename}</span>
+                                <span className={`shrink-0 text-[0.55rem] font-bold uppercase px-1.5 py-0.5 rounded ${file.status === 'modified' ? 'text-sky-400 bg-sky-500/10' : file.status === 'added' ? 'text-emerald-400 bg-emerald-500/10' : file.status === 'deleted' ? 'text-rose-400 bg-rose-500/10' : 'text-amber-400 bg-amber-500/10'}`}>{file.status}</span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <div className="flex gap-2 text-[0.6rem] font-bold">
+                              <div className="flex min-w-0 items-center justify-between gap-3">
+                                <div className="flex min-w-0 flex-wrap gap-2 text-[0.6rem] font-bold">
                                   <span className="text-emerald-500">+{file.additions}</span>
                                   <span className="text-rose-500">-{file.deletions}</span>
                                 </div>
-                                <button onClick={() => dispatch(toggleFileExpansion(file.filename))} className="text-[0.65rem] text-slate-500 hover:text-slate-200 transition-colors">
+                                <button onClick={() => dispatch(toggleFileExpansion(file.filename))} className="shrink-0 text-[0.65rem] text-slate-500 hover:text-slate-200 transition-colors">
                                   {expandedFiles[file.filename] ? 'Close Diff' : 'View Diff'}
                                 </button>
                               </div>
                               {expandedFiles[file.filename] && file.patch && (
-                                <pre className="mt-3 p-2 bg-slate-950 rounded-xl text-[0.6rem] text-slate-400 overflow-x-auto custom-scrollbar leading-5"><code>{file.patch}</code></pre>
+                                <pre className="mt-3 max-w-full overflow-x-auto rounded-xl bg-slate-950 p-2 text-[0.6rem] text-slate-400 custom-scrollbar leading-5"><code>{file.patch}</code></pre>
                               )}
                             </div>
                           ))}
@@ -453,7 +453,7 @@ function App() {
 
                 {/* ── Contextual Chat Sidebar ── */}
                 {chat.isOpen && (
-                  <div className="fixed top-0 right-0 h-screen w-full sm:w-96 bg-slate-950/80 backdrop-blur-2xl border-l border-slate-800 shadow-[20px_0_50px_rgba(0,0,0,0.5)] z-50 flex flex-col animate-slide-in-right">
+                  <div className="fixed inset-y-0 left-0 right-0 z-50 flex max-w-full flex-col overflow-x-hidden bg-slate-950/80 backdrop-blur-2xl animate-slide-in-right sm:left-auto sm:w-96 sm:border-l sm:border-slate-800 sm:shadow-[20px_0_50px_rgba(0,0,0,0.5)]">
                     <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-gradient-to-r from-emerald-500/10 to-transparent">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-lg">🤖</div>
