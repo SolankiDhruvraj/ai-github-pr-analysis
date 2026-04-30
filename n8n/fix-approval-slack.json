@@ -1,0 +1,129 @@
+{
+  "name": "PR Fix Approval In Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "pr-fix-approval",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "Webhook_Fix_Request",
+      "name": "Fix Approval Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.BACKEND_BASE_URL + '/automation/fix-approval-request'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "={{$env.N8N_WEBHOOK_SECRET}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { owner: $json.body.owner, repo: $json.body.repo, pullNumber: $json.body.pullNumber, issueId: $json.body.issueId } }}"
+      },
+      "id": "Build_Approval_Request",
+      "name": "Build Approval Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": "={{$env.SLACK_APPROVAL_CHANNEL_ID}}",
+        "text": "={{ `Approval needed for ${$json.approval.title}\\n${$json.approval.summary}\\n${$json.approval.message}` }}"
+      },
+      "id": "Post_Slack_Approval",
+      "name": "Post Slack Approval",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        780,
+        180
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "notice": "This workflow expects a second webhook or manual execution to approve. A common pattern is: Slack button -> secondary n8n webhook -> /automation/apply-approved-fix."
+      },
+      "id": "Approval_Note",
+      "name": "Approval Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        960,
+        40
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, approval: $json.approval, nextStep: 'Approve in Slack, then call /automation/apply-approved-fix with approval.applyPayload' } }}"
+      },
+      "id": "Respond_Approval",
+      "name": "Respond Approval",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Fix Approval Webhook": {
+      "main": [
+        [
+          {
+            "node": "Build Approval Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Approval Request": {
+      "main": [
+        [
+          {
+            "node": "Post Slack Approval",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Respond Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "pinData": {},
+  "versionId": "1"
+}

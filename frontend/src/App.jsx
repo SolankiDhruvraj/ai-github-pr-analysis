@@ -282,7 +282,7 @@ function App() {
                       className={`px-4 py-1.5 rounded-xl text-[0.7rem] font-bold transition-all shadow-lg flex items-center gap-2 ${chat.isOpen ? 'bg-amber-500 text-slate-950' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'}`}
                     >
                       <span className="text-sm">💬</span>
-                      {chat.isOpen ? 'Close Chat' : 'Ask AI about this PR'}
+                      {chat.isOpen ? 'Close Agent' : 'Ask PR Agent'}
                     </button>
                   </div>
                 </div>
@@ -459,7 +459,7 @@ function App() {
                         <div className="w-8 h-8 rounded-xl bg-emerald-500/20 flex items-center justify-center text-lg">🤖</div>
                         <div>
                           <h3 className="text-sm font-bold text-slate-100 uppercase tracking-tighter">PR Assistant</h3>
-                          <p className="text-[0.6rem] font-bold text-emerald-500 uppercase">Context Aware Chat</p>
+                          <p className="text-[0.6rem] font-bold text-emerald-500 uppercase">Context Aware Agent</p>
                         </div>
                       </div>
                       <button onClick={() => dispatch(setChatOpen(false))} className="text-slate-500 hover:text-slate-200 transition-colors">
@@ -471,7 +471,7 @@ function App() {
                       {chat.messages.length === 0 && (
                         <div className="h-full flex flex-col items-center justify-center text-center space-y-4 opacity-50">
                           <div className="w-12 h-12 rounded-2xl bg-slate-900 flex items-center justify-center text-2xl">⚡</div>
-                          <p className="text-xs text-slate-400 max-w-[200px]">Ask me anything about the changes in this pull request.</p>
+                          <p className="text-xs text-slate-400 max-w-[200px]">Ask about risks, files, fixes, release notes, or next actions for this pull request.</p>
                         </div>
                       )}
                       {chat.messages.map((msg, idx) => (

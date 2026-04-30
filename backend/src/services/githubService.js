@@ -1,7 +1,7 @@
 import { Octokit } from '@octokit/rest';
 
 const octokit = new Octokit({
-  auth: process.env.GITHUB_TOKEN
+  auth: process.env.GH_TOKEN
 });
 
 function normalizeFileStatus(status) {
@@ -60,9 +60,40 @@ async function getFileContentAtRef({ owner, repo, path, ref }) {
   }
 }
 
+export async function getPullRequestDetails({ owner, repo, pullNumber }) {
+  if (!process.env.GH_TOKEN) {
+    throw new Error('GH_TOKEN is not set in environment');
+  }
+
+  const { data } = await octokit.rest.pulls.get({
+    owner,
+    repo,
+    pull_number: pullNumber
+  });
+
+  return {
+    id: data.id,
+    number: data.number,
+    title: data.title,
+    body: data.body || '',
+    state: data.state,
+    merged: Boolean(data.merged),
+    mergedAt: data.merged_at,
+    htmlUrl: data.html_url,
+    author: data.user?.login || null,
+    baseBranch: data.base?.ref || null,
+    headBranch: data.head?.ref || null,
+    headSha: data.head?.sha || null,
+    labels: (data.labels || []).map((label) => label.name),
+    additions: data.additions,
+    deletions: data.deletions,
+    changedFiles: data.changed_files
+  };
+}
+
 export async function getPullRequestFiles({ owner, repo, pullNumber, maxPages = 10 }) {
-  if (!process.env.GITHUB_TOKEN) {
-    throw new Error('GITHUB_TOKEN is not set in environment');
+  if (!process.env.GH_TOKEN) {
+    throw new Error('GH_TOKEN is not set in environment');
   }
 
   const refs = await getPullRequestRefs({ owner, repo, pullNumber });
@@ -116,8 +147,8 @@ export async function getPullRequestFiles({ owner, repo, pullNumber, maxPages = 
 
 
 export async function postPullRequestReview({ owner, repo, pullNumber, event, body }) {
-  if (!process.env.GITHUB_TOKEN) {
-    throw new Error('GITHUB_TOKEN is not set — cannot post GitHub review');
+  if (!process.env.GH_TOKEN) {
+    throw new Error('GH_TOKEN is not set — cannot post GitHub review');
   }
 
   const { data } = await octokit.rest.pulls.createReview({
@@ -131,6 +162,51 @@ export async function postPullRequestReview({ owner, repo, pullNumber, event, bo
   return {
     reviewId: data.id,
     htmlUrl: data.html_url
+  };
+}
+
+export async function postPullRequestComment({ owner, repo, pullNumber, body }) {
+  if (!process.env.GH_TOKEN) {
+    throw new Error('GH_TOKEN is not set — cannot post GitHub comment');
+  }
+
+  const { data } = await octokit.rest.issues.createComment({
+    owner,
+    repo,
+    issue_number: pullNumber,
+    body
+  });
+
+  return {
+    commentId: data.id,
+    htmlUrl: data.html_url
+  };
+}
+
+export async function createDraftRelease({ owner, repo, tagName, targetCommitish, name, body }) {
+  if (!process.env.GH_TOKEN) {
+    throw new Error('GH_TOKEN is not set — cannot create GitHub release');
+  }
+
+  if (!tagName) {
+    throw new Error('tagName is required to create a GitHub release draft');
+  }
+
+  const { data } = await octokit.rest.repos.createRelease({
+    owner,
+    repo,
+    tag_name: tagName,
+    target_commitish: targetCommitish,
+    name: name || tagName,
+    body,
+    draft: true,
+    prerelease: false
+  });
+
+  return {
+    releaseId: data.id,
+    htmlUrl: data.html_url,
+    uploadUrl: data.upload_url
   };
 }
 
@@ -194,8 +270,8 @@ export async function getPullRequestBranch({ owner, repo, pullNumber }) {
 }
 
 export async function applyPullRequestFix({ owner, repo, pullNumber, filename, oldSnippet, newSnippet }) {
-  if (!process.env.GITHUB_TOKEN) {
-    throw new Error('GITHUB_TOKEN is not set');
+  if (!process.env.GH_TOKEN) {
+    throw new Error('GH_TOKEN is not set');
   }
 
   const { ref } = await getPullRequestBranch({ owner, repo, pullNumber });
@@ -209,14 +285,26 @@ export async function applyPullRequestFix({ owner, repo, pullNumber, filename, o
 
   const content = Buffer.from(fileData.content, 'base64').toString('utf-8');
 
+  const normalizedOldSnippet = normalizeSnippet(oldSnippet);
+  const replacementSnippet = extractReplacementSnippet(newSnippet);
 
-  let newContent = content;
-  if (oldSnippet && content.includes(oldSnippet)) {
-    newContent = content.replace(oldSnippet, newSnippet);
-  } else {
+  if (!normalizedOldSnippet) {
+    throw new Error(`No source code snippet was available for ${filename}, so the fix cannot be applied automatically.`);
+  }
 
+  if (!replacementSnippet) {
+    throw new Error(`No replacement code was available for ${filename}, so the fix cannot be applied automatically.`);
+  }
+
+  const match = findSnippetMatch(content, normalizedOldSnippet);
+  if (!match) {
     throw new Error(`Could not find the exact code snippet in ${filename} to apply the fix.`);
   }
+
+  const newContent =
+    content.slice(0, match.start) +
+    applyIndentation(replacementSnippet, match.indent) +
+    content.slice(match.end);
 
   await octokit.rest.repos.createOrUpdateFileContents({
     owner,
@@ -229,4 +317,80 @@ export async function applyPullRequestFix({ owner, repo, pullNumber, filename, o
   });
 
   return { ok: true, filename };
+}
+
+function normalizeSnippet(snippet) {
+  if (!snippet || typeof snippet !== 'string') return null;
+  return snippet.replace(/\r\n/g, '\n').trim();
+}
+
+function extractReplacementSnippet(snippet) {
+  const normalized = normalizeSnippet(snippet);
+  if (!normalized) return null;
+
+  const afterMarker = normalized.match(/(?:^|\n)(?:\/\/|#)\s*After[^\n]*\n([\s\S]+)$/);
+  if (afterMarker?.[1]) {
+    return afterMarker[1].trim();
+  }
+
+  return normalized;
+}
+
+function findSnippetMatch(content, snippet) {
+  if (content.includes(snippet)) {
+    const start = content.indexOf(snippet);
+    return {
+      start,
+      end: start + snippet.length,
+      indent: getLineIndent(content, start)
+    };
+  }
+
+  const targetLines = snippet.split('\n').map((line) => line.trim());
+  const contentLines = content.split('\n');
+
+  for (let startLine = 0; startLine <= contentLines.length - targetLines.length; startLine += 1) {
+    const slice = contentLines.slice(startLine, startLine + targetLines.length);
+    const matches = slice.every((line, index) => line.trim() === targetLines[index]);
+
+    if (!matches) continue;
+
+    const start = contentLines
+      .slice(0, startLine)
+      .reduce((total, line) => total + line.length + 1, 0);
+    const matchedText = slice.join('\n');
+
+    return {
+      start,
+      end: start + matchedText.length,
+      indent: slice[0].match(/^\s*/)?.[0] || ''
+    };
+  }
+
+  return null;
+}
+
+function getLineIndent(content, index) {
+  const lineStart = content.lastIndexOf('\n', index - 1) + 1;
+  const line = content.slice(lineStart, content.indexOf('\n', index) === -1 ? content.length : content.indexOf('\n', index));
+  return line.match(/^\s*/)?.[0] || '';
+}
+
+function applyIndentation(snippet, indent) {
+  const lines = stripCommonIndentation(snippet).split('\n');
+  return lines
+    .map((line) => (line.trim().length === 0 ? line : `${indent}${line}`))
+    .join('\n');
+}
+
+function stripCommonIndentation(snippet) {
+  const lines = snippet.split('\n');
+  const indents = lines
+    .filter((line) => line.trim().length > 0)
+    .map((line) => (line.match(/^\s*/) || [''])[0].length);
+
+  const commonIndent = indents.length ? Math.min(...indents) : 0;
+  if (commonIndent === 0) return snippet;
+
+  return lines.map((line) => line.slice(commonIndent)).join('\n');
 }

@@ -11,5 +11,11 @@ Thumbs.db
 # Docker overrides
 docker-compose.override.yml
 
+# Environment variables — NEVER commit secrets
+.env
+.env.*
+**/.env
+**/.env.*
+
 # Deployment artifacts
 *.pem

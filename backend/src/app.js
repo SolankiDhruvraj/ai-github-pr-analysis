@@ -5,6 +5,8 @@ import githubWebhookRouter from './github/webhook.js';
 import githubTriggerRouter from './github/trigger.js';
 import githubApplyRouter from './github/apply.js';
 import githubChatRouter from './github/chat.js';
+import githubAgentRouter from './github/agent.js';
+import githubAutomationRouter from './github/automation.js';
 
 export function createApp() {
   const app = express();
@@ -27,6 +29,12 @@ export function createApp() {
 
   // Chat endpoint - interactive AI chat about the PR
   app.use('/github/chat', githubChatRouter);
+
+  // Agent endpoint - tool-aware PR assistant for dashboard and n8n workflows
+  app.use('/github/agent', githubAgentRouter);
+
+  // n8n automation endpoints - release notes and approval workflows
+  app.use('/automation', githubAutomationRouter);
 
   // Simple health check for the backend
   app.get('/health', (_req, res) => {

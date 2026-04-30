@@ -21,7 +21,6 @@ export const queueRedis = new Redis(redisUrl, {
 
 redis.on('error', (err) => {
     if (err.code === 'ECONNREFUSED') {
-        // Suppress spamming logs if we know it's down
     } else {
         console.error('Redis Service Client error:', err.message);
     }

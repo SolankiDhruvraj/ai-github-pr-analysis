@@ -22,8 +22,8 @@ router.post('/', async (req, res) => {
         });
     }
 
-    if (!process.env.GITHUB_TOKEN) {
-        console.error('[Chat] Error: GITHUB_TOKEN is not configured on the server.');
+    if (!process.env.GH_TOKEN) {
+        console.error('[Chat] Error: GH_TOKEN is not configured on the server.');
         return res.status(500).json({ error: 'GitHub authentication is not configured on the server.' });
     }
 

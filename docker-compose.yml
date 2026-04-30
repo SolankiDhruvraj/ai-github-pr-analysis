@@ -55,6 +55,34 @@ services:
       retries: 3
       start_period: 15s
 
+  # ─── n8n (Workflow Automation) ─────────────────────────────────────────────
+  n8n:
+    image: n8nio/n8n:latest
+    restart: always
+    environment:
+      - N8N_HOST=${N8N_HOST:-localhost}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - N8N_BASE_URL=${N8N_BASE_URL:-http://n8n:5678}
+      - GENERIC_TIMEZONE=${N8N_TIMEZONE:-Asia/Kolkata}
+      - N8N_SECURE_COOKIE=false
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_BASIC_AUTH_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_BASIC_AUTH_PASSWORD:-changeme}
+      - N8N_WEBHOOK_SECRET=${N8N_WEBHOOK_SECRET:-replace-me}
+      - BACKEND_BASE_URL=${BACKEND_BASE_URL:-http://backend:4000}
+      - SLACK_RELEASE_CHANNEL_ID=${SLACK_RELEASE_CHANNEL_ID:-}
+      - SLACK_APPROVAL_CHANNEL_ID=${SLACK_APPROVAL_CHANNEL_ID:-}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      backend:
+        condition: service_healthy
+
   # ─── Frontend (Nginx + React Build) ───────────────────────────────────────
   frontend:
     build:
@@ -83,3 +111,4 @@ services:
 volumes:
   redis_data:
   postgres_data:
+  n8n_data:

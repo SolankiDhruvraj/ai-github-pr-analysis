@@ -47,17 +47,32 @@ export const applyIssueFix = createAsyncThunk('reviews/applyIssueFix', async (pa
   return { issueId: payload.issueId, success: true };
 });
 
-// 4. Send Chat message
+function formatAgentAnswer(data) {
+  const actions = Array.isArray(data.suggestedActions) ? data.suggestedActions : [];
+  if (!actions.length) return data.answer;
+
+  const actionLines = actions
+    .slice(0, 4)
+    .map((action) => `- ${action.label}${action.requiresApproval ? ' (approval required)' : ''}`)
+    .join('\n');
+
+  return `${data.answer}\n\nSuggested next actions:\n${actionLines}`;
+}
+
+// 4. Send message to the PR agent
 export const sendChatQuestion = createAsyncThunk('reviews/sendChatQuestion', async (payload, { signal }) => {
-  const res = await fetch('/github/chat', {
+  const res = await fetch('/github/agent', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({
+      ...payload,
+      message: payload.message || payload.question
+    }),
     signal
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'AI Error');
-  return data.answer;
+  return formatAgentAnswer(data);
 });
 
 const reviewsSlice = createSlice({

@@ -1,0 +1,219 @@
+{
+  "name": "PR Release Notes On Merge",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "pr-release-notes",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "Webhook_PR_Merged",
+      "name": "GitHub PR Merged Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "merged-check",
+              "leftValue": "={{$json.body.action}}",
+              "rightValue": "closed",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "merged-flag",
+              "leftValue": "={{$json.body.pull_request.merged}}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "id": "If_PR_Merged",
+      "name": "PR Was Merged?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.BACKEND_BASE_URL + '/automation/release-notes'}}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "={{$env.N8N_WEBHOOK_SECRET}}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { owner: $json.body.repository.owner.login, repo: $json.body.repository.name, pullNumber: $json.body.pull_request.number, action: $json.body.action, merged: $json.body.pull_request.merged, createGithubDraft: false } }}"
+      },
+      "id": "Generate_Release_Notes",
+      "name": "Generate Release Notes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $json;\nconst notes = data.releaseNotes || {};\nreturn [{\n  json: {\n    releaseTitle: notes.title || `PR #${data.pullRequest?.number}`,\n    slackText: notes.slackText || `Merged PR #${data.pullRequest?.number}: ${notes.title || 'Release notes ready'}`,\n    githubUrl: data.pullRequest?.htmlUrl || null,\n    markdown: notes.markdown || '',\n    changedAreas: (notes.changedAreas || []).join(', '),\n    highlights: (notes.highlights || []).join('\\n- '),\n    riskNotes: (notes.riskNotes || []).join('\\n- ')\n  }\n}];"
+      },
+      "id": "Format_Release_Payload",
+      "name": "Format Release Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": "={{$env.SLACK_RELEASE_CHANNEL_ID}}",
+        "text": "={{$json.slackText + '\\n' + ($json.githubUrl || '')}}"
+      },
+      "id": "Slack_Release_Notification",
+      "name": "Slack Release Notification",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1300,
+        100
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, workflow: 'release-notes-on-merge', releaseTitle: $json.releaseTitle || 'Release notes created' } }}"
+      },
+      "id": "Respond_Success",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, skipped: true, reason: 'PR was not merged' } }}"
+      },
+      "id": "Respond_Skipped",
+      "name": "Respond Skipped",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        360
+      ]
+    }
+  ],
+  "connections": {
+    "GitHub PR Merged Webhook": {
+      "main": [
+        [
+          {
+            "node": "PR Was Merged?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PR Was Merged?": {
+      "main": [
+        [
+          {
+            "node": "Generate Release Notes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Skipped",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Release Notes": {
+      "main": [
+        [
+          {
+            "node": "Format Release Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Release Payload": {
+      "main": [
+        [
+          {
+            "node": "Slack Release Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack Release Notification": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "pinData": {},
+  "versionId": "1"
+}

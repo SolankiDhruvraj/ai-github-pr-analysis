@@ -1,0 +1,213 @@
+{
+  "name": "PR Agent Automation Router",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "pr-agent-router",
+        "httpMethod": "POST",
+        "responseMode": "responseNode"
+      },
+      "id": "Webhook_Agent",
+      "name": "Agent Automation Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        260,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const payload = $json.body || {};\nconst actions = payload.agentResult?.suggestedActions || [];\nreturn actions.map((action) => ({ json: { ...payload, action } }));"
+      },
+      "id": "Expand_Actions",
+      "name": "Expand Agent Actions",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        520,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.action.type}}",
+                    "rightValue": "notify_team",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{$json.action.type}}",
+                    "rightValue": "request_fix_approval",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              }
+            }
+          ]
+        }
+      },
+      "id": "Route_Actions",
+      "name": "Route Actions",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.3,
+      "position": [
+        780,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "post",
+        "select": "channel",
+        "channelId": "={{$env.SLACK_APPROVAL_CHANNEL_ID}}",
+        "text": "={{ `Risky PR detected: ${$json.owner}/${$json.repo}#${$json.pullNumber}\\n${$json.agentResult.answer}` }}"
+      },
+      "id": "Notify_Slack",
+      "name": "Notify Slack",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.3,
+      "position": [
+        1040,
+        120
+      ],
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{$env.N8N_BASE_URL + '/webhook/pr-fix-approval'}}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { owner: $json.owner, repo: $json.repo, pullNumber: $json.pullNumber, issueId: $json.action.issueId } }}"
+      },
+      "id": "Request_Fix_Approval",
+      "name": "Request Fix Approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        260
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { ok: true, handledActions: ($json.body?.agentResult?.suggestedActions || []).length } }}"
+      },
+      "id": "Respond_Agent",
+      "name": "Respond Agent",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1300,
+        260
+      ]
+    }
+  ],
+  "connections": {
+    "Agent Automation Webhook": {
+      "main": [
+        [
+          {
+            "node": "Expand Agent Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Expand Agent Actions": {
+      "main": [
+        [
+          {
+            "node": "Route Actions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Actions": {
+      "main": [
+        [
+          {
+            "node": "Notify Slack",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Request Fix Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Fix Approval": {
+      "main": [
+        [
+          {
+            "node": "Respond Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {},
+  "pinData": {},
+  "versionId": "1"
+}
