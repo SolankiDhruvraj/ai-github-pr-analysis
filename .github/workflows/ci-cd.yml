@@ -136,13 +136,13 @@ jobs:
             sleep 15
 
             # ── Health check ──────────────────────────────────────────────
-            if curl -sf http://localhost:4000/health > /dev/null; then
+            if curl -sf --max-time 5 http://localhost:4000/health > /dev/null; then
               echo "✅ Backend is healthy"
             else
               echo "⚠️  Backend health check failed"
             fi
 
-            if curl -sf http://localhost:5678/healthz > /dev/null 2>&1; then
+            if curl -sf --max-time 5 http://localhost:5678/ > /dev/null 2>&1; then
               echo "✅ n8n is healthy"
             else
               echo "⚠️  n8n health check pending (may still be starting)"
